@@ -1,1 +1,1490 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>솜깅이 메이커 (Somgingi Maker)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+      body {
+        font-family: 'Nunito', sans-serif;
+      }
+      
+      /* Custom Animations */
+      @keyframes bounce-x-left {
+        0%, 100% { transform: translateX(0); }
+        50% { transform: translateX(10px); }
+      }
+      @keyframes bounce-x-right {
+        0%, 100% { transform: translateX(0); }
+        50% { transform: translateX(-10px); }
+      }
+      
+      .animate-bounce-left-guide {
+        animation: bounce-x-left 1s ease-in-out infinite;
+      }
+      .animate-bounce-right-guide {
+        animation: bounce-x-right 1s ease-in-out infinite;
+      }
 
+      /* Scrollbar Hiding */
+      .scrollbar-hide::-webkit-scrollbar {
+          display: none;
+      }
+      .scrollbar-hide {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+      }
+      
+      .custom-scrollbar::-webkit-scrollbar {
+          width: 6px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb {
+          background-color: #e5e5e5;
+          border-radius: 20px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background-color: #d4d4d4;
+      }
+    </style>
+    <!-- Import Map for React & GenAI -->
+    <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@18.2.0",
+    "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+    "@google/genai": "https://esm.sh/@google/genai",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/"
+  }
+}
+</script>
+    <!-- Babel Standalone to compile JSX in browser -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body class="bg-pink-50 text-slate-800">
+    <div id="root"></div>
+
+    <script type="text/babel" data-type="module">
+        import React, { useState, useRef, useEffect, useCallback } from 'react';
+        import ReactDOM from 'react-dom/client';
+        import { GoogleGenAI, HarmCategory, HarmBlockThreshold } from "@google/genai";
+
+        // --- Mock Process for Browser Environment ---
+        const process = { env: { API_KEY: '' } };
+
+        /* =========================================
+           CONSTANTS
+           ========================================= */
+        const TWITTER_HEADER_WIDTH = 1500;
+        const TWITTER_HEADER_HEIGHT = 500;
+
+        const BACKGROUNDS = [
+          {
+            id: 'bg-cocoa',
+            name: '소프트 코코아',
+            type: 'solid',
+            value: '#EBE0D6', 
+            accentColor: '#D97706'
+          },
+          {
+            id: 'bg-foggy',
+            name: '포기 블루',
+            type: 'solid',
+            value: '#CFD8DC', 
+            accentColor: '#607D8B'
+          },
+          {
+            id: 'bg-sage',
+            name: '세이지 라떼',
+            type: 'solid',
+            value: '#E0E5DF', 
+            accentColor: '#4CAF50'
+          },
+          {
+            id: 'bg-indie',
+            name: '인디 핑크',
+            type: 'solid',
+            value: '#F4C2C2', 
+            accentColor: '#E91E63'
+          }
+        ];
+
+        const AI_THEMES = [
+          {
+            id: 'theme-christmas',
+            name: '크리스마스',
+            icon: '🎄',
+            prompt: 'A cozy, festive Christmas party room background. Topic: Holiday celebration. Style: Warm 16-bit pixel art. Elements: A large decorated Christmas tree in the background (far left or right). A warm brick fireplace with stockings. Strings of warm fairy lights and garlands hanging from the top ceiling. COMPOSITION RULE: The bottom 20% is a wooden floor with a soft rug for characters to stand on. The center area is open space. No people/characters in the image, just the warm background.'
+          },
+          {
+            id: 'theme-coffin',
+            name: '할로윈 관짝',
+            icon: '⚰️',
+            prompt: 'A horizontal row of 4 cute, open gothic coffins lined up side-by-side, standing vertically. Front view. The coffins are open, revealing soft red or purple velvet lining inside. 16-bit pixel art style. Spooky but cute Halloween aesthetic. COMPOSITION RULE: The coffins are standing on the ground. The bottom of the coffins must be at the bottom 15% line of the image. The tops of the coffins should reach near the top. CRITICAL: The coffins must be EMPTY. NO VAMPIRES, NO CHARACTERS inside.'
+          },
+          {
+            id: 'theme-school',
+            name: '마법 학교',
+            icon: '🏰',
+            prompt: 'Interior of a grand Magical Hall with floating candles. High ceiling with enchanted starry night sky. Gothic stone walls with large stained glass windows. 16-bit pixel art style, detailed and atmospheric. CRITICAL REQUIREMENT: The room must be COMPLETELY EMPTY. NO PEOPLE, NO CHARACTERS, NO STUDENTS, NO FIGURES in the background. Focus only on the architecture and magic atmosphere.'
+          },
+          {
+            id: 'theme-hall',
+            name: '명예의 전당',
+            icon: '🏛️',
+            prompt: 'A classical marble museum hall or temple. A horizontal row of 4 distinct spaces separated by elegant white marble columns (pillars). Each space is an empty niche or pedestal. 16-bit pixel art style. COMPOSITION RULE: The pedestals/floor must be at the bottom 10% of the image. The columns should rise from the bottom floor to the top ceiling. CRITICAL: The niches must be EMPTY. NO STATUES, NO FIGURES.'
+          },
+          {
+            id: 'theme-arcade',
+            name: '게임 선택창',
+            icon: '🕹️',
+            prompt: 'A retro video game character selection screen. A horizontal row of 4 vertical rectangular slots/frames lined up side-by-side. Each frame has a neon glowing border. 16-bit pixel art style. Dark tech background. COMPOSITION RULE: The selection slots are aligned to the BOTTOM of the screen. The bottom of the frames should be at the bottom 10-15% of the image. CRITICAL: The slots must be COMPLETELY EMPTY. NO CHARACTERS, NO FACES, NO SILHOUETTES inside the frames. Just the empty wireframe or dark glass background.'
+          },
+          {
+            id: 'theme-lab',
+            name: 'SF 실험실',
+            icon: '🧪',
+            prompt: 'A sci-fi laboratory background with a row of 4 vertical glass stasis capsules (tanks) lined up side-by-side. The tanks are empty, filled with faint glowing blue liquid/light. Cyberpunk pixel art style. COMPOSITION RULE: The tanks are floor-mounted. The base of the tanks must be at the bottom 10% of the image. CRITICAL: The tanks must be EMPTY. NO ALIENS, NO PEOPLE inside.'
+          },
+          {
+            id: 'theme-field',
+            name: '몽환의 숲',
+            icon: '🍄',
+            prompt: 'A dreamy fairy forest background, side-scrolling view. Pastel purple and pink gradient sky with soft clouds. Foreground features giant glowing mushrooms and crystal flowers. Floating islands in the sky. Magical sparkles floating in the air. COMPOSITION: The ground level is at the bottom 20% of the image. EXACTLY TWO cute round slime creatures (pastel colors) on the ground. Flat 2D pixel art, high quality.'
+          },
+          {
+            id: 'theme-shelf',
+            name: '포근한 내 방',
+            icon: '🎀',
+            prompt: 'A super cute, cozy doll display nook inside a bright room. COMPOSITION RULES: 1. The bottom 20% MUST be a LIGHT CREAM/BEIGE wooden floor plank, extending fully from left to right. 2. The top 80% is a pastel pink or cream wall with VERY SPARSE, SIMPLE patterns. 3. DECORATION: Colorful triangular BUNTING FLAGS (garland) hanging from the very top ceiling. 4. A small round window with soft sunlight. 5. EXACTLY TWO cute tiny props on the floor (like a teddy bear or gift box). Style: Soft pastel pixel art, bright and airy, clean lines.'
+          },
+          {
+            id: 'theme-box',
+            name: '인형 상자',
+            icon: '📦',
+            prompt: 'A horizontal row of 4 cute, empty collectible doll packaging boxes (window boxes) lined up side-by-side. Front view. Design: Tall vertical rectangular boxes with large empty clear cut-out windows in the center. Each box has a different pastel color theme (Pink, Blue, Yellow, Purple). Style: High-quality 16-bit pixel art, clean lines. COMPOSITION RULE: The boxes are standing on a shelf/floor. The bottom edge of the boxes must be aligned with the bottom 10% of the image. CRITICAL: The boxes must be EMPTY. NO DOLLS inside.'
+          }
+        ];
+
+        /* =========================================
+           UTILS (Image Processing)
+           ========================================= */
+        const removeGreenScreen = (base64Image) => {
+          return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.src = base64Image;
+            img.crossOrigin = "Anonymous";
+            
+            img.onload = () => {
+              const canvas = document.createElement('canvas');
+              canvas.width = img.width;
+              canvas.height = img.height;
+              
+              const ctx = canvas.getContext('2d');
+              if (!ctx) {
+                reject(new Error("Could not get canvas context"));
+                return;
+              }
+              
+              ctx.drawImage(img, 0, 0);
+              
+              const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+              const data = imageData.data;
+              const width = canvas.width;
+              const height = canvas.height;
+              
+              const isGreenScreen = (r, g, b) => {
+                  const isGreenDominant = (g > r + 20) && (g > b + 20);
+                  const isBrightEnough = g > 90;
+                  return isGreenDominant && isBrightEnough;
+              };
+
+              const stack = [];
+
+              const checkAndPush = (x, y) => {
+                  const idx = (y * width + x) * 4;
+                  if (data[idx+3] !== 0 && isGreenScreen(data[idx], data[idx+1], data[idx+2])) {
+                      stack.push([x, y]);
+                      data[idx+3] = 0; 
+                  }
+              };
+
+              for (let x = 0; x < width; x++) {
+                  checkAndPush(x, 0); 
+                  checkAndPush(x, height - 1); 
+              }
+              for (let y = 0; y < height; y++) {
+                  checkAndPush(0, y); 
+                  checkAndPush(width - 1, y); 
+              }
+
+              const dx = [1, -1, 0, 0];
+              const dy = [0, 0, 1, -1];
+
+              while(stack.length > 0) {
+                  const [cx, cy] = stack.pop();
+
+                  for(let i=0; i<4; i++) {
+                      const nx = cx + dx[i];
+                      const ny = cy + dy[i];
+
+                      if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                          const nIdx = (ny * width + nx) * 4;
+                          if (data[nIdx + 3] !== 0) {
+                              const r = data[nIdx];
+                              const g = data[nIdx + 1];
+                              const b = data[nIdx + 2];
+
+                              if (isGreenScreen(r, g, b)) {
+                                  data[nIdx + 3] = 0; 
+                                  stack.push([nx, ny]);
+                              }
+                          }
+                      }
+                  }
+              }
+              
+              ctx.putImageData(imageData, 0, 0);
+              resolve(canvas.toDataURL('image/png'));
+            };
+            
+            img.onerror = (err) => reject(err);
+          });
+        };
+
+        /* =========================================
+           SERVICE (Gemini API)
+           ========================================= */
+        let dynamicApiKey = null;
+
+        const setGlobalApiKey = (key) => {
+          dynamicApiKey = key;
+        };
+
+        const getClient = () => {
+          const apiKey = dynamicApiKey || process.env.API_KEY;
+          if (!apiKey) {
+            throw new Error("API Key가 설정되지 않았습니다. 로그인 화면에서 키를 입력해주세요.");
+          }
+          return new GoogleGenAI({ apiKey });
+        };
+
+        const handleGeminiError = (error) => {
+          console.error("Gemini API Error:", error);
+          const msg = error.message || JSON.stringify(error);
+
+          if (msg.includes("API_KEY_INVALID")) {
+            throw new Error("키가 올바르지 않아요. 오타가 있거나 삭제된 키일 수 있습니다. 복잡한 설정 필요 없이 '새 키'를 하나 만들어서 넣어보세요!");
+          }
+          
+          if (msg.includes("PERMISSION_DENIED")) {
+            throw new Error("API 키 권한이 없습니다. 올바른 키인지 확인해주세요.");
+          }
+
+          if (msg.includes("429") || msg.includes("quota")) {
+              throw new Error("사용량이 너무 많아 잠시 제한되었습니다. 1분 뒤에 다시 시도해주세요.");
+          }
+
+          throw error;
+        };
+
+        const extractImageFromResponse = (response) => {
+            const candidates = response.candidates;
+            if (!candidates || candidates.length === 0) {
+               if (response.promptFeedback && response.promptFeedback.blockReason) {
+                 throw new Error(`AI가 이미지를 차단했어요: ${response.promptFeedback.blockReason}`);
+               }
+               throw new Error("이미지가 생성되지 않았어요.");
+            }
+
+            const parts = candidates[0].content.parts;
+            let generatedImageBase64 = '';
+
+            for (const part of parts) {
+              if (part.inlineData && part.inlineData.data) {
+                generatedImageBase64 = part.inlineData.data;
+                break;
+              }
+            }
+
+            if (!generatedImageBase64) {
+              const textPart = parts.find((p) => p.text);
+              if (textPart) {
+                throw new Error(`AI 응답: ${textPart.text}`);
+              }
+              throw new Error("이미지 데이터가 없습니다.");
+            }
+
+            return `data:image/png;base64,${generatedImageBase64}`;
+        }
+
+        const generateDollImage = async (referenceImageBase64) => {
+          const ai = getClient();
+          const cleanBase64 = referenceImageBase64.replace(/^data:image\/(png|jpeg|jpg|webp);base64,/, "");
+
+          const prompt = `
+            Transform the character in this image into a cute, high-quality 'cotton doll' (Somgingi) plushie toy.
+            
+            STRICT REQUIREMENTS:
+            1.  **OUTFIT (CRITICAL)**: The doll MUST be fully clothed. If the source image is a headshot or upper-body only, **YOU MUST INVENT CUTE MATCHING PANTS, SKIRT, OR SHOES** to complete the look. Do NOT make a doll without bottom clothing.
+            2.  **Style**: Korean cotton doll style, chibi proportions, big head, small body.
+            3.  **Texture**: Soft plush fabric, embroidery thread details for eyes and mouth.
+            4.  **View**: Full body, standing front pose.
+            5.  **Background**: **Solid NEON GREEN (RGB: 0, 255, 0 / Hex: #00FF00)**. This is a chroma key Green Screen. The background must be completely FLAT, UNIFORM, and BRIGHT GREEN. No gradients, no shadows on the wall, no floor texture. Just pure green color behind the doll.
+            6.  **Lighting**: Soft studio lighting on the doll only. Do not cast heavy shadows on the green background.
+            
+            Return ONLY the image.
+          `;
+
+          try {
+            const response = await ai.models.generateContent({
+              model: 'gemini-2.5-flash-image',
+              contents: {
+                parts: [
+                  { text: prompt },
+                  { inlineData: { mimeType: 'image/png', data: cleanBase64 } }
+                ]
+              },
+              config: {
+                safetySettings: [
+                  { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+                  { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+                  { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+                  { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+                ]
+              }
+            });
+            return extractImageFromResponse(response);
+          } catch (error) {
+            handleGeminiError(error);
+          }
+        };
+
+        const generatePixelBackground = async (themePrompt) => {
+          const ai = getClient();
+          const prompt = `
+            Create a pixel art background image specifically for a TWITTER HEADER (1500x500 pixels).
+            Topic: ${themePrompt}
+            
+            CRITICAL COMPOSITION RULES:
+            1.  **Output Format**: The image must be suitable for a header (wide).
+            2.  **Zoom Level**: Standard view, not too zoomed in, not fish-eye.
+            3.  **Safe Zone**: Keep main elements centered vertically.
+            
+            Style Requirements:
+            - Aspect Ratio: 16:9.
+            - Style: 16-bit retro game style, SNES/GBA aesthetic.
+            - Perspective: Flat 2D or symmetric perspective.
+            - Colors: Cute, pastel, atmospheric.
+            - NO TEXT, NO UI elements.
+            
+            Return ONLY the image.
+          `;
+
+          try {
+            const response = await ai.models.generateContent({
+              model: 'gemini-2.5-flash-image',
+              contents: { parts: [{ text: prompt }] },
+              config: {
+                imageConfig: { aspectRatio: '16:9' },
+                safetySettings: [
+                  { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+                  { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+                  { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+                  { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+                ]
+              }
+            });
+            return extractImageFromResponse(response);
+          } catch (error) {
+            handleGeminiError(error);
+          }
+        };
+
+        /* =========================================
+           COMPONENTS (EditorCanvas)
+           ========================================= */
+        const drawDoll = (ctx, doll, img, isSelected) => {
+          const aspect = img.width / img.height;
+          const baseHeight = TWITTER_HEADER_HEIGHT * 0.9; 
+          const h = baseHeight * doll.scale;
+          const w = h * aspect;
+
+          ctx.save();
+          ctx.translate(doll.x, doll.y);
+          ctx.rotate(doll.rotation * Math.PI / 180);
+
+          ctx.shadowColor = "rgba(0,0,0,0.2)";
+          ctx.shadowBlur = 20;
+          ctx.shadowOffsetY = 10;
+
+          ctx.drawImage(img, -w/2, -h/2, w, h);
+
+          if (isSelected) {
+            ctx.shadowColor = "transparent"; 
+            ctx.strokeStyle = "#3b82f6";
+            ctx.lineWidth = 2;
+            ctx.strokeRect(-w/2, -h/2, w, h);
+            
+            ctx.fillStyle = "white";
+            ctx.lineWidth = 1;
+            const handleSize = 8;
+            const drawHandle = (cx, cy) => {
+                ctx.fillRect(cx - handleSize/2, cy - handleSize/2, handleSize, handleSize);
+                ctx.strokeRect(cx - handleSize/2, cy - handleSize/2, handleSize, handleSize);
+            };
+            drawHandle(-w/2, -h/2);
+            drawHandle(w/2, h/2);
+            drawHandle(-w/2, h/2);
+            drawHandle(w/2, -h/2);
+          }
+          ctx.restore();
+        };
+
+        const EditorCanvas = ({ 
+          dolls, selectedDollId, onSelectDoll, onUpdateDoll, background, bgOffset, onDownload, onInteract
+        }) => {
+          const canvasRef = useRef(null);
+          const imagesRef = useRef({});
+          const bgImageRef = useRef(null);
+          
+          const [isDragging, setIsDragging] = useState(false);
+          const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+
+          const draw = useCallback(() => {
+            const canvas = canvasRef.current;
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return;
+
+            ctx.clearRect(0, 0, TWITTER_HEADER_WIDTH, TWITTER_HEADER_HEIGHT);
+
+            if (background.type === 'solid') {
+              ctx.fillStyle = background.value;
+              ctx.fillRect(0, 0, TWITTER_HEADER_WIDTH, TWITTER_HEADER_HEIGHT);
+            } else if (background.type === 'gradient') {
+                const gradient = ctx.createLinearGradient(0, 0, TWITTER_HEADER_WIDTH, TWITTER_HEADER_HEIGHT);
+                gradient.addColorStop(0, '#ffffff');
+                gradient.addColorStop(1, '#f3f4f6');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, TWITTER_HEADER_WIDTH, TWITTER_HEADER_HEIGHT);
+            } else if (background.type === 'image' && bgImageRef.current) {
+                ctx.save();
+                const img = bgImageRef.current;
+                const scale = Math.max(TWITTER_HEADER_WIDTH / img.width, TWITTER_HEADER_HEIGHT / img.height);
+                const scaledWidth = img.width * scale;
+                const scaledHeight = img.height * scale;
+                const x = (TWITTER_HEADER_WIDTH / 2) - (scaledWidth / 2);
+                const range = TWITTER_HEADER_HEIGHT - scaledHeight;
+                const y = range * (bgOffset / 100);
+                ctx.drawImage(img, x, y, scaledWidth, scaledHeight);
+                ctx.restore();
+            }
+
+            if (background.type !== 'image') {
+                ctx.strokeStyle = 'rgba(0, 0, 0, 0.03)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                for(let i=0; i<TWITTER_HEADER_WIDTH; i+=50) {
+                    ctx.moveTo(i, 0);
+                    ctx.lineTo(i, TWITTER_HEADER_HEIGHT);
+                }
+                for(let i=0; i<TWITTER_HEADER_HEIGHT; i+=50) {
+                    ctx.moveTo(0, i);
+                    ctx.lineTo(TWITTER_HEADER_WIDTH, i);
+                }
+                ctx.stroke();
+            }
+
+            dolls.forEach(doll => {
+              const img = imagesRef.current[doll.id];
+              if (img && img.complete) {
+                drawDoll(ctx, doll, img, doll.id === selectedDollId);
+              }
+            });
+
+          }, [dolls, selectedDollId, background, bgOffset]);
+
+          useEffect(() => {
+            const currentIds = new Set(dolls.map(d => d.id));
+            Object.keys(imagesRef.current).forEach(id => {
+                if (!currentIds.has(id)) {
+                    delete imagesRef.current[id];
+                }
+            });
+
+            dolls.forEach(doll => {
+              const existingImg = imagesRef.current[doll.id];
+              if (!existingImg || existingImg.src !== doll.image) {
+                const img = new Image();
+                img.src = doll.image;
+                img.onload = () => draw(); 
+                imagesRef.current[doll.id] = img;
+              }
+            });
+            draw();
+          }, [dolls, draw]);
+
+          useEffect(() => {
+            if (background.type === 'image') {
+              const img = new Image();
+              img.src = background.value;
+              img.onload = () => {
+                bgImageRef.current = img;
+                draw();
+              };
+            } else {
+              bgImageRef.current = null;
+              draw();
+            }
+          }, [background, draw]);
+
+          const getCanvasCoords = (clientX, clientY) => {
+            const canvas = canvasRef.current;
+            if (!canvas) return { x: 0, y: 0 };
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            return {
+              x: (clientX - rect.left) * scaleX,
+              y: (clientY - rect.top) * scaleY
+            };
+          };
+
+          const getHitDollId = (x, y) => {
+            for (let i = dolls.length - 1; i >= 0; i--) {
+              const doll = dolls[i];
+              const img = imagesRef.current[doll.id];
+              if (!img) continue;
+              
+              const aspect = img.width / img.height;
+              const baseHeight = TWITTER_HEADER_HEIGHT * 0.9;
+              const h = baseHeight * doll.scale;
+              const w = h * aspect;
+              
+              if (x >= doll.x - w/2 && x <= doll.x + w/2 && y >= doll.y - h/2 && y <= doll.y + h/2) {
+                return doll.id;
+              }
+            }
+            return null;
+          };
+
+          const handleMouseDown = (e) => {
+            if (onInteract) onInteract();
+            const { x, y } = getCanvasCoords(e.clientX, e.clientY);
+            const hitId = getHitDollId(x, y);
+            
+            if (hitId) {
+              onSelectDoll(hitId);
+              setIsDragging(true);
+              setDragStart({ x, y });
+            } else {
+              onSelectDoll(null);
+            }
+          };
+          
+          const handleMouseMove = (e) => {
+            if (!isDragging || !selectedDollId) return;
+            const { x, y } = getCanvasCoords(e.clientX, e.clientY);
+            const dx = x - dragStart.x;
+            const dy = y - dragStart.y;
+            
+            const doll = dolls.find(d => d.id === selectedDollId);
+            if (doll) {
+              onUpdateDoll(selectedDollId, { x: doll.x + dx, y: doll.y + dy });
+            }
+            setDragStart({ x, y });
+          };
+
+          const handleMouseUp = () => setIsDragging(false);
+
+          const handleTouchStart = (e) => {
+            if (onInteract) onInteract();
+            const touch = e.touches[0];
+            const { x, y } = getCanvasCoords(touch.clientX, touch.clientY);
+            const hitId = getHitDollId(x, y);
+            
+            if (hitId) {
+              onSelectDoll(hitId);
+              setIsDragging(true);
+              setDragStart({ x, y });
+            } else {
+              onSelectDoll(null);
+            }
+          };
+
+          const handleTouchMove = (e) => {
+            if (!isDragging || !selectedDollId) return;
+            const touch = e.touches[0];
+            const { x, y } = getCanvasCoords(touch.clientX, touch.clientY);
+            const dx = x - dragStart.x;
+            const dy = y - dragStart.y;
+            
+            const doll = dolls.find(d => d.id === selectedDollId);
+            if (doll) {
+              onUpdateDoll(selectedDollId, { x: doll.x + dx, y: doll.y + dy });
+            }
+            setDragStart({ x, y });
+          };
+
+          const handleDownloadClick = () => {
+            const currentSelection = selectedDollId;
+            onSelectDoll(null);
+            requestAnimationFrame(() => {
+                const canvas = canvasRef.current;
+                if (canvas) onDownload(canvas.toDataURL('image/png'));
+                onSelectDoll(currentSelection);
+            });
+          };
+
+          return (
+            <div className="w-full flex flex-col items-center">
+              <div className="w-full relative cursor-move touch-none bg-white">
+                 <canvas
+                  ref={canvasRef}
+                  width={TWITTER_HEADER_WIDTH}
+                  height={TWITTER_HEADER_HEIGHT}
+                  className="w-full h-auto block touch-none"
+                  onMouseDown={handleMouseDown}
+                  onMouseMove={handleMouseMove}
+                  onMouseUp={handleMouseUp}
+                  onMouseLeave={handleMouseUp}
+                  onTouchStart={handleTouchStart}
+                  onTouchMove={handleTouchMove}
+                  onTouchEnd={handleMouseUp}
+                  onTouchCancel={handleMouseUp}
+                />
+                <button id="canvas-save-btn" className="hidden" onClick={handleDownloadClick} />
+              </div>
+            </div>
+          );
+        };
+
+        /* =========================================
+           MAIN APP
+           ========================================= */
+        const Icons = {
+          Upload: () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>,
+          Folder: () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" /></svg>,
+          Doll: () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+          Palette: () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" /></svg>,
+          Download: () => <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>,
+          Rotate: () => <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>,
+          Trash: () => <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>,
+          Logout: () => <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>,
+          Magic: () => <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg>,
+          Plus: () => <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" /></svg>,
+          Minus: () => <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 12H4" /></svg>,
+          ChevronUp: () => <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 15l7-7 7 7" /></svg>,
+          ChevronDown: () => <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 9l-7 7-7-7" /></svg>,
+          Shield: () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>,
+          Info: () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+          Check: () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 13l4 4L19 7" /></svg>,
+          Link: () => <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>,
+          ArrowLeft: () => <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 19l-7-7 7-7" /></svg>,
+          ArrowRight: () => <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5l7 7-7 7" /></svg>,
+          Save: () => <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" /></svg>,
+          Key: () => <svg className="w-12 h-12" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" /></svg>,
+          Back: () => <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 17l-5-5m0 0l5-5m-5 5h12" /></svg>
+        };
+
+        const App = () => {
+          const [apiKey, setApiKey] = useState(null);
+          const [inputKey, setInputKey] = useState('');
+          const [activeTab, setActiveTab] = useState('dolls');
+          const [dolls, setDolls] = useState([]);
+          const [selectedDollId, setSelectedDollId] = useState(null);
+          const [isGenerating, setIsGenerating] = useState(false);
+          const [isGeneratingBg, setIsGeneratingBg] = useState(false);
+          const [error, setError] = useState(null);
+          const [selectedBg, setSelectedBg] = useState(BACKGROUNDS[0]);
+          const [bgHistory, setBgHistory] = useState([]);
+          const [bgOffset, setBgOffset] = useState(100);
+          const [showBgHint, setShowBgHint] = useState(false);
+          const [showDollHint, setShowDollHint] = useState(false);
+
+          const bgScrollIntervalRef = useRef(null);
+          const bgScrollTimeoutRef = useRef(null);
+          const dollSizeIntervalRef = useRef(null);
+          const dollSizeTimeoutRef = useRef(null);
+          const fileInputRef = useRef(null);
+          const bgFileInputRef = useRef(null);
+          const customDollInputRef = useRef(null);
+
+          useEffect(() => {
+            if (process.env.API_KEY) {
+              setApiKey(process.env.API_KEY);
+              setGlobalApiKey(process.env.API_KEY);
+              return;
+            }
+            const storedKey = localStorage.getItem('gemini_api_key');
+            if (storedKey) {
+              setApiKey(storedKey);
+              setGlobalApiKey(storedKey);
+            }
+          }, []);
+
+          const handleLogin = () => {
+            if (!inputKey.trim()) {
+              alert("키를 입력해주세요!");
+              return;
+            }
+            const key = inputKey.trim();
+            setApiKey(key);
+            setGlobalApiKey(key);
+            localStorage.setItem('gemini_api_key', key);
+          };
+
+          const handleLogout = () => {
+            setApiKey(null);
+            setGlobalApiKey(null);
+            localStorage.removeItem('gemini_api_key');
+            setInputKey('');
+            setDolls([]);
+            setSelectedDollId(null);
+          };
+
+          if (!apiKey) {
+            return (
+                <div className="min-h-screen flex flex-col items-center justify-center bg-neutral-100 text-neutral-800 p-6 font-sans overflow-y-auto">
+                    <div className="max-w-md w-full bg-white rounded-3xl shadow-xl border border-neutral-200 overflow-hidden my-10">
+                        <div className="p-8 bg-neutral-50/50 space-y-6">
+                            <div className="text-center space-y-2">
+                                <div className="w-16 h-16 bg-white border border-neutral-100 rounded-full flex items-center justify-center mx-auto shadow-sm text-neutral-800 mb-2">
+                                    <Icons.Key />
+                                </div>
+                                <h1 className="text-2xl font-extrabold text-neutral-800 tracking-tight">솜깅이 메이커</h1>
+                                <p className="text-neutral-500 text-sm">나만의 솜인형을 만들어보세요.</p>
+                            </div>
+
+                            <div className="bg-white p-5 rounded-2xl border border-neutral-200 shadow-sm space-y-4">
+                                <h3 className="text-sm font-bold text-neutral-800 flex items-center gap-2">
+                                    <span className="w-5 h-5 bg-neutral-800 text-white rounded-full flex items-center justify-center text-[10px]">1</span>
+                                    API 키 발급받기
+                                </h3>
+                                <div className="text-xs text-neutral-600 leading-relaxed pl-2">
+                                    <ol className="list-decimal space-y-2 pl-4 marker:text-neutral-400 marker:font-bold">
+                                        <li><a href="https://aistudio.google.com/api-keys" target="_blank" rel="noopener noreferrer" className="text-blue-600 font-bold underline decoration-blue-200 underline-offset-2">Google AI Studio</a>에 접속해서 구글 계정으로 로그인해주세요.</li>
+                                        <li>오른쪽 상단 <span className="font-bold text-neutral-800 bg-neutral-100 px-1 rounded">Create API key</span> 버튼을 누르세요.</li>
+                                        <li>새 키 만들기 메뉴가 뜨면, 키 이름을 원하는대로 적어주세요.</li>
+                                        <li>하단 가져온 프로젝트에서는 <span className="font-bold text-neutral-800">'+새 프로젝트 만들기'</span>를 클릭해 주세요.</li>
+                                        <li>프로젝트 이름을 영문 4글자 원하는대로 적어주세요.</li>
+                                        <li>생성된 프로젝트를 고르고 <span className="font-bold text-neutral-800">'키 만들기'</span>를 눌러주세요.</li>
+                                        <li>키가 생성됩니다. <span className="text-neutral-400">(예: abc-defg-cligenn-000...)</span></li>
+                                        <li>생성된 키를 복사해서 아래 칸에 붙여넣으세요.</li>
+                                    </ol>
+                                    <p className="text-neutral-400 mt-3 pt-3 border-t border-neutral-100">* 결제 계좌를 등록하지 않아도 되고, 무료로 사용 가능해요.</p>
+                                    <p className="text-blue-500 font-bold">* 새로 만든 키는 별도 설정 없이 바로 작동하니 안심하세요!</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="p-8 pt-2 bg-white space-y-6">
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-neutral-500 mb-2 ml-1">API KEY</label>
+                                    <input 
+                                        type="password" 
+                                        placeholder="복사한 키를 여기에 붙여넣으세요" 
+                                        className="w-full h-14 px-4 rounded-xl border border-neutral-200 bg-neutral-50 focus:bg-white focus:border-neutral-900 focus:ring-2 focus:ring-neutral-100 outline-none transition font-mono text-sm"
+                                        value={inputKey}
+                                        onChange={(e) => setInputKey(e.target.value)}
+                                    />
+                                </div>
+                                <button 
+                                    onClick={handleLogin}
+                                    className="w-full h-14 bg-neutral-900 hover:bg-black text-white font-bold rounded-xl shadow-lg shadow-neutral-200 transition transform active:scale-95 flex items-center justify-center gap-2"
+                                >
+                                    시작하기
+                                    <Icons.ArrowRight />
+                                </button>
+                            </div>
+
+                            <div className="flex items-start gap-3 p-4 bg-red-50 rounded-xl border border-red-100 text-red-800/80">
+                                 <div className="mt-0.5 shrink-0"><Icons.Shield /></div>
+                                 <div className="text-xs font-medium leading-relaxed">
+                                     <span className="font-bold text-red-700 block mb-1">키는 저장되지 않아요!</span>
+                                     입력하신 API 키는 <strong>서버로 전송되지 않으며</strong>, 오직 브라우저에서 AI와 통신할 때만 사용됩니다. 안심하세요.
+                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="text-neutral-400 text-xs text-center">
+                        Somgingi Maker © 2024
+                    </div>
+                </div>
+            );
+          }
+
+          const handleGenerate = async (e) => {
+            const file = e.target.files?.[0];
+            if (!file) return; 
+            
+            if (file.size > 20 * 1024 * 1024) {
+              setError("파일 크기가 너무 커요! 20MB 이하의 이미지를 부탁드려요.");
+              return;
+            }
+
+            setIsGenerating(true);
+            setError(null);
+            
+            const reader = new FileReader();
+            reader.onload = async (event) => {
+                const userImage = event.target?.result;
+                if (!userImage) return;
+
+                try {
+                    const rawGeneratedImage = await generateDollImage(userImage);
+                    const transparentImage = await removeGreenScreen(rawGeneratedImage);
+
+                    const newDoll = {
+                        id: Date.now().toString(),
+                        image: transparentImage,
+                        originalImage: userImage,
+                        x: TWITTER_HEADER_WIDTH / 2,
+                        y: TWITTER_HEADER_HEIGHT / 2,
+                        scale: 0.8,
+                        rotation: 0
+                    };
+
+                    setDolls(prev => [...prev, newDoll]);
+                    setSelectedDollId(newDoll.id);
+                    setActiveTab('dolls'); 
+                    
+                    if (!showDollHint) {
+                        setShowDollHint(true);
+                        setTimeout(() => setShowDollHint(false), 5000);
+                    }
+
+                } catch (err) {
+                    console.error(err);
+                    if (err.message && (err.message.includes('quota') || err.message.includes('429'))) {
+                        setError("AI 트래픽이 많아 잠시 지연되고 있습니다. 1분 뒤 다시 시도해주세요.");
+                    } else {
+                        setError(err.message || "이미지 생성 중 오류가 발생했습니다.");
+                    }
+                } finally {
+                    setIsGenerating(false);
+                    if (fileInputRef.current) fileInputRef.current.value = '';
+                }
+            };
+            reader.readAsDataURL(file);
+          };
+
+          const handleCustomDollUpload = (e) => {
+            const file = e.target.files?.[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    if (event.target?.result) {
+                        const base64 = event.target.result;
+                        const newDoll = {
+                            id: `custom-doll-${Date.now()}`,
+                            image: base64,
+                            originalImage: base64,
+                            x: TWITTER_HEADER_WIDTH / 2,
+                            y: TWITTER_HEADER_HEIGHT / 2,
+                            scale: 0.8,
+                            rotation: 0
+                        };
+                        setDolls(prev => [...prev, newDoll]);
+                        setSelectedDollId(newDoll.id);
+                        if (customDollInputRef.current) customDollInputRef.current.value = '';
+
+                        if (!showDollHint) {
+                            setShowDollHint(true);
+                            setTimeout(() => setShowDollHint(false), 5000);
+                        }
+                    }
+                };
+                reader.readAsDataURL(file);
+            }
+          };
+
+          const handleRegenerate = async () => {
+            if (!selectedDollId) return;
+            const targetDoll = dolls.find(d => d.id === selectedDollId);
+            if (!targetDoll || !targetDoll.originalImage) return;
+
+            setIsGenerating(true);
+            setError(null);
+
+            try {
+              const rawGeneratedImage = await generateDollImage(targetDoll.originalImage);
+              const transparentImage = await removeGreenScreen(rawGeneratedImage);
+
+              setDolls(prev => prev.map(d => 
+                d.id === selectedDollId 
+                ? { ...d, image: transparentImage }
+                : d
+              ));
+            } catch (err) {
+              console.error(err);
+              setError(err.message || "재생성에 실패했습니다.");
+            } finally {
+              setIsGenerating(false);
+            }
+          };
+
+          const handleUpdateDoll = (id, updates) => {
+            setDolls(prev => prev.map(d => d.id === id ? { ...d, ...updates } : d));
+          };
+
+          const handleDeleteDoll = (id) => {
+            setDolls(prev => prev.filter(d => d.id !== id));
+            if (selectedDollId === id) setSelectedDollId(null);
+          }
+
+          const handleDownloadDoll = (doll) => {
+            const link = document.createElement('a');
+            link.href = doll.image;
+            link.download = `somgingi-${doll.id}.png`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+          };
+
+          const moveDollLayer = (id, direction) => {
+              setDolls(prev => {
+                  const index = prev.findIndex(d => d.id === id);
+                  if (index === -1) return prev;
+                  
+                  const newDolls = [...prev];
+                  if (direction === 'up') {
+                      if (index < newDolls.length - 1) {
+                          [newDolls[index], newDolls[index + 1]] = [newDolls[index + 1], newDolls[index]];
+                      }
+                  } else {
+                      if (index > 0) {
+                          [newDolls[index], newDolls[index - 1]] = [newDolls[index - 1], newDolls[index]];
+                      }
+                  }
+                  return newDolls;
+              });
+          };
+
+          const startDollResize = (delta) => {
+              const performResize = () => {
+                setDolls(prev => {
+                    if (!selectedDollId) return prev; 
+                    return prev.map(d => {
+                       if (d.id === selectedDollId) {
+                           const newScale = Math.max(0.2, Math.min(2.0, d.scale + delta));
+                           return { ...d, scale: newScale };
+                       }
+                       return d;
+                    });
+                });
+              };
+
+              performResize();
+              stopDollResize();
+
+              dollSizeTimeoutRef.current = setTimeout(() => {
+                  dollSizeIntervalRef.current = setInterval(performResize, 50);
+              }, 300);
+          };
+
+          const stopDollResize = () => {
+              if (dollSizeTimeoutRef.current) clearTimeout(dollSizeTimeoutRef.current);
+              if (dollSizeIntervalRef.current) clearInterval(dollSizeIntervalRef.current);
+          };
+
+          const handleGenerateBg = async (theme) => {
+              setIsGeneratingBg(true);
+              setError(null);
+              try {
+                  const bgImage = await generatePixelBackground(theme.prompt);
+                  const newBg = {
+                      id: `ai-${theme.id}-${Date.now()}`,
+                      name: theme.name,
+                      type: 'image',
+                      value: bgImage,
+                      accentColor: '#6366f1'
+                  };
+                  setSelectedBg(newBg);
+                  setBgHistory(prev => [newBg, ...prev]);
+
+                   if (!showBgHint) {
+                    setShowBgHint(true);
+                    setTimeout(() => setShowBgHint(false), 5000);
+                   }
+              } catch (err) {
+                  console.error(err);
+                  setError(err.message || "배경 생성 실패");
+              } finally {
+                  setIsGeneratingBg(false);
+              }
+          };
+
+          const handleBgUpload = (e) => {
+            const file = e.target.files?.[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    if (event.target?.result) {
+                        const newBg = {
+                            id: `custom-${Date.now()}`,
+                            name: 'Custom Upload',
+                            type: 'image',
+                            value: event.target.result,
+                            accentColor: '#333'
+                        };
+                        setSelectedBg(newBg);
+                        setBgHistory(prev => [newBg, ...prev]);
+
+                        if (!showBgHint) {
+                            setShowBgHint(true);
+                            setTimeout(() => setShowBgHint(false), 5000);
+                        }
+                    }
+                };
+                reader.readAsDataURL(file);
+            }
+          };
+
+          const startBgScroll = (direction) => {
+              const step = direction === 'up' ? -2 : 2;
+              const performScroll = () => {
+                 setBgOffset(prev => Math.max(0, Math.min(100, prev + step)));
+              };
+              performScroll();
+              stopBgScroll();
+              bgScrollTimeoutRef.current = setTimeout(() => {
+                  bgScrollIntervalRef.current = setInterval(performScroll, 30);
+              }, 300);
+          };
+
+          const stopBgScroll = () => {
+              if (bgScrollTimeoutRef.current) clearTimeout(bgScrollTimeoutRef.current);
+              if (bgScrollIntervalRef.current) clearInterval(bgScrollIntervalRef.current);
+              bgScrollTimeoutRef.current = null;
+              bgScrollIntervalRef.current = null;
+          };
+
+          const handleDownload = (dataUrl) => {
+            const link = document.createElement('a');
+            link.href = dataUrl;
+            link.download = 'somgingi-header.png';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+          };
+          
+          const triggerDownload = () => {
+            const saveBtn = document.getElementById('canvas-save-btn');
+            if(saveBtn) saveBtn.click();
+          };
+
+          const selectedDoll = dolls.find(d => d.id === selectedDollId);
+          const isCustomDoll = selectedDoll ? selectedDoll.id.startsWith('custom-doll-') : false;
+
+          return (
+            <div className="h-screen flex flex-col bg-neutral-50 text-neutral-900 font-sans overflow-hidden">
+              <div className="flex-none h-[35vh] min-h-[300px] bg-neutral-100 flex items-center justify-center p-4 sm:p-8 relative overflow-hidden border-b border-neutral-200">
+                 
+                 <button 
+                    onClick={handleLogout}
+                    className="absolute top-4 left-4 z-50 p-2.5 rounded-full bg-white/80 backdrop-blur-md border border-neutral-200 shadow-md text-neutral-600 hover:bg-neutral-100 hover:text-red-500 active:scale-95 transition"
+                    title="처음 화면으로 / 키 지우기"
+                 >
+                    <Icons.Back />
+                 </button>
+                 
+                 <button 
+                    onClick={triggerDownload}
+                    className="absolute top-4 right-4 z-50 p-2.5 rounded-full bg-neutral-900/80 backdrop-blur-md border border-white/10 shadow-lg text-white hover:bg-black active:scale-95 transition"
+                 >
+                    <Icons.Download />
+                 </button>
+
+                 {selectedDollId && (
+                    <div className="md:hidden absolute left-4 bottom-4 z-50 flex gap-1 p-1 rounded-2xl bg-white/80 backdrop-blur-md border border-white/40 shadow-xl select-none items-center">
+                         <div className="flex items-center gap-1 px-1">
+                            <button 
+                                onPointerDown={() => startDollResize(-0.02)}
+                                onPointerUp={stopDollResize}
+                                onPointerLeave={stopDollResize}
+                                className="w-10 h-10 rounded-xl bg-neutral-100 text-neutral-800 flex items-center justify-center active:scale-90 transition"
+                            >
+                                <Icons.Minus />
+                            </button>
+                            <span className="text-[10px] font-bold text-neutral-500 px-1">크기</span>
+                            <button 
+                                onPointerDown={() => startDollResize(0.02)}
+                                onPointerUp={stopDollResize}
+                                onPointerLeave={stopDollResize}
+                                className="w-10 h-10 rounded-xl bg-neutral-100 text-neutral-800 flex items-center justify-center active:scale-90 transition"
+                            >
+                                <Icons.Plus />
+                            </button>
+                        </div>
+                    </div>
+                 )}
+
+                 {activeTab === 'background' && (selectedBg.type === 'image' || bgHistory.find(b => b.id === selectedBg.id)) && (
+                    <div className="md:hidden absolute right-4 bottom-4 z-50 flex gap-1 p-1 rounded-2xl bg-white/80 backdrop-blur-md border border-white/40 shadow-xl select-none items-center">
+                        <div className="flex items-center gap-1 px-1">
+                            <button 
+                                onPointerDown={() => startBgScroll('up')}
+                                onPointerUp={stopBgScroll}
+                                onPointerLeave={stopBgScroll}
+                                className="w-10 h-10 rounded-xl bg-neutral-100 text-neutral-800 flex items-center justify-center active:scale-90 transition"
+                            >
+                                <Icons.ChevronUp />
+                            </button>
+                            <span className="text-[10px] font-bold text-neutral-500 px-1">배경</span>
+                            <button 
+                                onPointerDown={() => startBgScroll('down')}
+                                onPointerUp={stopBgScroll}
+                                onPointerLeave={stopBgScroll}
+                                className="w-10 h-10 rounded-xl bg-neutral-100 text-neutral-800 flex items-center justify-center active:scale-90 transition"
+                            >
+                                <Icons.ChevronDown />
+                            </button>
+                        </div>
+                    </div>
+                 )}
+
+                 {showDollHint && selectedDollId && (
+                    <div 
+                        className="md:hidden absolute left-4 bottom-16 z-50 animate-bounce-left-guide cursor-pointer"
+                        onClick={() => setShowDollHint(false)}
+                    >
+                        <div className="bg-neutral-900 text-white text-xs font-bold px-3 py-2 rounded-lg shadow-xl border border-white/20 relative">
+                            <div className="absolute bottom-[-5px] left-4 w-2 h-2 bg-neutral-900 rotate-45 border-b border-r border-white/20"></div>
+                            <span className="whitespace-nowrap drop-shadow-md">여기서 크기를 조절해요!</span>
+                        </div>
+                    </div>
+                 )}
+                 
+                 {showBgHint && activeTab === 'background' && (selectedBg.type === 'image' || bgHistory.find(b => b.id === selectedBg.id)) && (
+                    <div 
+                        className="md:hidden absolute right-4 bottom-16 z-50 animate-bounce-right-guide cursor-pointer"
+                        onClick={() => setShowBgHint(false)}
+                    >
+                        <div className="bg-neutral-900 text-white text-xs font-bold px-3 py-2 rounded-lg shadow-xl border border-white/20 relative">
+                             <div className="absolute bottom-[-5px] right-4 w-2 h-2 bg-neutral-900 rotate-45 border-b border-r border-white/20"></div>
+                             <span className="whitespace-nowrap drop-shadow-md">배경을 위아래로 움직여보세요!</span>
+                        </div>
+                    </div>
+                 )}
+                 
+                 <div className="absolute inset-0 opacity-[0.03] pointer-events-none" 
+                      style={{ 
+                          backgroundImage: 'linear-gradient(45deg, #000 25%, transparent 25%), linear-gradient(-45deg, #000 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #000 75%), linear-gradient(-45deg, transparent 75%, #000 75%)',
+                          backgroundSize: '20px 20px',
+                          backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0px' 
+                      }} 
+                 />
+
+                 <div className="relative shadow-xl shadow-neutral-200/60 rounded-lg overflow-hidden bg-white w-full max-w-5xl ring-1 ring-neutral-200 transition-all group">
+                     
+                     {selectedDollId && (
+                        <div className="hidden md:flex absolute left-6 bottom-6 z-50 flex-row items-center gap-3 p-2 rounded-full bg-white/60 backdrop-blur-md border border-white/40 shadow-lg">
+                            <span className="text-[10px] font-bold text-neutral-800/80 px-2 whitespace-nowrap">크기</span>
+                            <input
+                                type="range"
+                                min="0.3"
+                                max="2.0"
+                                step="0.05"
+                                value={dolls.find(d => d.id === selectedDollId)?.scale || 0.8}
+                                onChange={(e) => handleUpdateDoll(selectedDollId, { scale: parseFloat(e.target.value) })}
+                                className="w-24 h-1.5 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-neutral-900"
+                            />
+                                <span className="text-[10px] font-mono text-neutral-600 w-8 text-right">
+                                {Math.round((dolls.find(d => d.id === selectedDollId)?.scale || 0.8) * 100)}%
+                                </span>
+                        </div>
+                     )}
+
+                     {activeTab === 'background' && (selectedBg.type === 'image' || bgHistory.find(b => b.id === selectedBg.id)) && (
+                        <div className="hidden md:flex absolute right-6 bottom-6 z-50 gap-2 p-1.5 rounded-full bg-white/60 backdrop-blur-md border border-white/40 shadow-lg select-none items-center">
+                            <button 
+                                onPointerDown={() => startBgScroll('up')}
+                                onPointerUp={stopBgScroll}
+                                onPointerLeave={stopBgScroll}
+                                className="p-2 rounded-full hover:bg-white/50 text-neutral-800 transition active:scale-90 touch-none flex items-center justify-center"
+                                title="위로 (꾹 누르면 연속 이동)"
+                            >
+                                <Icons.ChevronUp />
+                            </button>
+                            <span className="text-[10px] font-bold text-neutral-800/80 px-1 whitespace-nowrap">배경위치</span>
+                            <button 
+                                onPointerDown={() => startBgScroll('down')}
+                                onPointerUp={stopBgScroll}
+                                onPointerLeave={stopBgScroll}
+                                className="p-2 rounded-full hover:bg-white/50 text-neutral-800 transition active:scale-90 touch-none flex items-center justify-center"
+                                title="아래로 (꾹 누르면 연속 이동)"
+                            >
+                                <Icons.ChevronDown />
+                            </button>
+                        </div>
+                     )}
+
+                     {showDollHint && selectedDollId && (
+                        <div 
+                            className="hidden md:block absolute left-6 bottom-20 md:left-28 md:bottom-20 z-50 animate-bounce-left-guide cursor-pointer"
+                            onClick={() => setShowDollHint(false)}
+                        >
+                            <div className="bg-neutral-900 text-white text-xs font-bold px-3 py-2 rounded-lg shadow-xl border border-white/20 relative">
+                                <div className="absolute bottom-[-5px] left-4 w-2 h-2 bg-neutral-900 rotate-45 border-b border-r border-white/20"></div>
+                                <span className="whitespace-nowrap drop-shadow-md">여기서 크기를 조절해요!</span>
+                            </div>
+                        </div>
+                     )}
+                     
+                     {showBgHint && activeTab === 'background' && (selectedBg.type === 'image' || bgHistory.find(b => b.id === selectedBg.id)) && (
+                        <div 
+                            className="hidden md:block absolute right-6 bottom-20 z-50 animate-bounce-right-guide cursor-pointer"
+                            onClick={() => setShowBgHint(false)}
+                        >
+                            <div className="bg-neutral-900 text-white text-xs font-bold px-3 py-2 rounded-lg shadow-xl border border-white/20 relative">
+                                 <div className="absolute bottom-[-5px] right-4 w-2 h-2 bg-neutral-900 rotate-45 border-b border-r border-white/20"></div>
+                                 <span className="whitespace-nowrap drop-shadow-md">배경을 위아래로 움직여보세요!</span>
+                            </div>
+                        </div>
+                     )}
+
+                     {error && (
+                        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 bg-red-500/90 backdrop-blur-sm text-white px-4 py-2 rounded-lg text-xs font-bold shadow-lg animate-fade-in-down pointer-events-none max-w-[90%] text-center">
+                           {error}
+                        </div>
+                     )}
+
+                     {(isGenerating || isGeneratingBg) && (
+                        <div className="absolute inset-0 bg-white/50 backdrop-blur-sm z-40 flex flex-col items-center justify-center pointer-events-none">
+                           <div className="w-10 h-10 border-4 border-neutral-200 border-t-neutral-900 rounded-full animate-spin mb-3"></div>
+                           <span className="text-xs font-bold text-neutral-600 tracking-wide">{isGenerating ? '열심히 꿰매는 중...' : '배경 그리는 중...'}</span>
+                        </div>
+                     )}
+
+                     <EditorCanvas 
+                          dolls={dolls}
+                          selectedDollId={selectedDollId}
+                          onSelectDoll={(id) => {
+                              setSelectedDollId(id);
+                          }}
+                          onUpdateDoll={handleUpdateDoll}
+                          background={selectedBg}
+                          bgOffset={bgOffset}
+                          onDownload={handleDownload}
+                     />
+                 </div>
+              </div>
+
+              <div className="flex-1 bg-white flex flex-col min-h-0 relative z-40">
+                 <div className="flex border-b border-neutral-100 flex-none justify-center bg-white z-10">
+                    <button 
+                       onClick={() => setActiveTab('dolls')}
+                       className={`w-1/2 sm:w-40 py-4 text-sm font-bold flex justify-center items-center gap-2 transition relative ${activeTab === 'dolls' ? 'text-neutral-900' : 'text-neutral-400 hover:text-neutral-600'}`}
+                    >
+                       <Icons.Doll />
+                       솜깅이
+                       {activeTab === 'dolls' && <div className="absolute bottom-0 left-0 w-full h-[2px] bg-neutral-900"></div>}
+                    </button>
+                    <div className="w-[1px] bg-neutral-100 my-3 hidden sm:block"></div>
+                    <button 
+                       onClick={() => setActiveTab('background')}
+                       className={`w-1/2 sm:w-40 py-4 text-sm font-bold flex justify-center items-center gap-2 transition relative ${activeTab === 'background' ? 'text-neutral-900' : 'text-neutral-400 hover:text-neutral-600'}`}
+                    >
+                       <Icons.Palette />
+                       배경 꾸미기
+                       {activeTab === 'background' && <div className="absolute bottom-0 left-0 w-full h-[2px] bg-neutral-900"></div>}
+                    </button>
+                 </div>
+
+                 <div className="flex-1 overflow-y-auto custom-scrollbar p-6 bg-white/50">
+                    <div className="max-w-5xl mx-auto w-full pb-20"> 
+                    
+                        {activeTab === 'dolls' && (
+                           <div className="animate-fade-in flex flex-col gap-8">
+                              
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                                  <div className="md:col-span-1 space-y-3">
+                                     <label className="text-xs font-bold text-neutral-400 uppercase tracking-wide">새로 추가</label>
+                                     <div className="flex gap-2 h-14">
+                                        <button 
+                                           onClick={() => fileInputRef.current?.click()}
+                                           className="flex-1 bg-neutral-900 hover:bg-black text-white rounded-xl flex items-center justify-center gap-2 transition shadow-sm"
+                                        >
+                                           <Icons.Upload />
+                                           <span className="text-sm font-bold">사진으로 만들기</span>
+                                        </button>
+                                        <button 
+                                           onClick={() => customDollInputRef.current?.click()}
+                                           className="flex-1 bg-white border border-neutral-200 hover:bg-neutral-50 text-neutral-700 rounded-xl flex items-center justify-center gap-2 transition"
+                                        >
+                                           <Icons.Folder />
+                                           <span className="text-sm font-bold">내 솜깅이 소환</span>
+                                        </button>
+                                     </div>
+                                  </div>
+
+                                  <div className="md:col-span-2 space-y-3">
+                                     <label className="text-xs font-bold text-neutral-400 uppercase tracking-wide">레이어 ({dolls.length})</label>
+                                     <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide min-h-[70px]">
+                                        {dolls.length === 0 && (
+                                            <div className="text-sm text-neutral-400 flex items-center h-14">등록된 인형이 없습니다.</div>
+                                        )}
+                                        {[...dolls].reverse().map(doll => (
+                                           <button
+                                              key={doll.id}
+                                              onClick={() => setSelectedDollId(doll.id)}
+                                              className={`flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden border transition relative ${selectedDollId === doll.id ? 'border-neutral-900 ring-2 ring-neutral-900 ring-offset-2 opacity-100' : 'border-neutral-200 opacity-60 hover:opacity-100'}`}
+                                           >
+                                              <img src={doll.image} className="w-full h-full object-cover bg-white" alt="doll" />
+                                           </button>
+                                        ))}
+                                     </div>
+                                  </div>
+                              </div>
+
+                              {selectedDoll ? (
+                                 <div className="pt-4">
+                                    <div className="flex items-center justify-between w-full">
+                                        <button 
+                                            onClick={() => moveDollLayer(selectedDoll.id, 'up')} 
+                                            className="flex flex-col items-center justify-center gap-1 flex-1 min-w-0 text-neutral-600 hover:text-neutral-900 transition group"
+                                        >
+                                            <div className="p-1.5 rounded-full group-hover:bg-neutral-100 transition"><Icons.ArrowLeft /></div>
+                                            <span className="text-[10px] font-bold whitespace-nowrap">순서 앞</span>
+                                        </button>
+                                        
+                                        <button 
+                                            onClick={() => moveDollLayer(selectedDoll.id, 'down')} 
+                                            className="flex flex-col items-center justify-center gap-1 flex-1 min-w-0 text-neutral-600 hover:text-neutral-900 transition group"
+                                        >
+                                            <div className="p-1.5 rounded-full group-hover:bg-neutral-100 transition"><Icons.ArrowRight /></div>
+                                            <span className="text-[10px] font-bold whitespace-nowrap">순서 뒤</span>
+                                        </button>
+
+                                        <div className="w-[1px] h-8 bg-neutral-200 mx-1"></div>
+
+                                        <button 
+                                            onClick={() => handleUpdateDoll(selectedDoll.id, { rotation: (selectedDoll.rotation + 45) % 360 })} 
+                                            className="flex flex-col items-center justify-center gap-1 flex-1 min-w-0 text-neutral-600 hover:text-neutral-900 transition group"
+                                        >
+                                            <div className="p-1.5 rounded-full group-hover:bg-neutral-100 transition"><Icons.Rotate /></div>
+                                            <span className="text-[10px] font-bold whitespace-nowrap">회전</span>
+                                        </button>
+
+                                        {!isCustomDoll && (
+                                            <button 
+                                                onClick={handleRegenerate} 
+                                                className="flex flex-col items-center justify-center gap-1 flex-1 min-w-0 text-indigo-500 hover:text-indigo-700 transition group"
+                                            >
+                                                <div className="p-1.5 rounded-full group-hover:bg-indigo-50 transition"><Icons.Magic /></div>
+                                                <span className="text-[10px] font-bold whitespace-nowrap">다시 그리기</span>
+                                            </button>
+                                        )}
+
+                                        <button 
+                                            onClick={() => handleDownloadDoll(selectedDoll)} 
+                                            className="flex flex-col items-center justify-center gap-1 flex-1 min-w-0 text-neutral-600 hover:text-neutral-900 transition group"
+                                        >
+                                            <div className="p-1.5 rounded-full group-hover:bg-neutral-100 transition"><Icons.Save /></div>
+                                            <span className="text-[10px] font-bold whitespace-nowrap">개별 저장</span>
+                                        </button>
+                                        
+                                        <button 
+                                            onClick={() => handleDeleteDoll(selectedDoll.id)} 
+                                            className="flex flex-col items-center justify-center gap-1 flex-1 min-w-0 text-red-400 hover:text-red-600 transition group"
+                                        >
+                                            <div className="p-1.5 rounded-full group-hover:bg-red-50 transition"><Icons.Trash /></div>
+                                            <span className="text-[10px] font-bold whitespace-nowrap">삭제</span>
+                                        </button>
+                                    </div>
+                                 </div>
+                              ) : (
+                                 dolls.length > 0 && <div className="text-center text-sm text-neutral-400 py-10 border border-dashed border-neutral-200 rounded-xl">편집할 인형을 위 목록에서 선택해주세요.</div>
+                              )}
+                           </div>
+                        )}
+
+                        {activeTab === 'background' && (
+                           <div className="animate-fade-in space-y-8">
+                              <div className="space-y-3">
+                                 <label className="text-xs font-bold text-neutral-400 uppercase tracking-wide">단색 배경</label>
+                                 <div className="flex flex-wrap gap-3">
+                                    {BACKGROUNDS.map((bg) => (
+                                       <button
+                                          key={bg.id}
+                                          onClick={() => setSelectedBg(bg)}
+                                          className={`w-10 h-10 rounded-full border transition ${selectedBg.id === bg.id ? 'border-neutral-900 ring-2 ring-neutral-900 ring-offset-2 scale-110' : 'border-neutral-200 hover:scale-105'}`}
+                                          style={{ background: bg.value }}
+                                          title={bg.name}
+                                       />
+                                    ))}
+                                 </div>
+                              </div>
+
+                              <div className="space-y-3">
+                                 <label className="text-xs font-bold text-neutral-400 uppercase tracking-wide">AI 배경 : 누를 때 마다 AI가 새롭게 그려와요!</label>
+                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                    <button 
+                                       onClick={() => bgFileInputRef.current?.click()}
+                                       className="h-14 rounded-xl border border-dashed border-neutral-300 flex items-center justify-center gap-2 text-neutral-400 hover:border-neutral-900 hover:text-neutral-900 transition bg-neutral-50/50"
+                                    >
+                                       <Icons.Folder />
+                                       <span className="text-xs font-bold">직접 업로드</span>
+                                    </button>
+                                    {AI_THEMES.map(theme => (
+                                       <button
+                                          key={theme.id}
+                                          onClick={() => handleGenerateBg(theme)}
+                                          className="h-14 px-3 flex items-center gap-3 bg-white border border-neutral-200 hover:border-indigo-300 hover:shadow-md rounded-xl transition group"
+                                       >
+                                          <span className="text-xl group-hover:scale-110 transition-transform">{theme.icon}</span>
+                                          <span className="text-xs font-bold text-neutral-600 text-left">{theme.name}</span>
+                                       </button>
+                                    ))}
+                                 </div>
+                              </div>
+
+                              {bgHistory.length > 0 && (
+                                  <div className="pt-6 border-t border-neutral-100 flex flex-col gap-6">
+                                     <div className="space-y-3">
+                                        <label className="text-xs font-bold text-neutral-400 uppercase tracking-wide">최근 사용</label>
+                                        <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+                                           {bgHistory.map((bg) => (
+                                              <button
+                                                 key={bg.id}
+                                                 onClick={() => setSelectedBg(bg)}
+                                                 className={`flex-shrink-0 w-20 h-12 rounded-lg overflow-hidden border transition ${selectedBg.id === bg.id ? 'border-neutral-900 ring-2 ring-neutral-900 ring-offset-1' : 'border-neutral-200 opacity-70 hover:opacity-100'}`}
+                                              >
+                                                 <img src={bg.value} className="w-full h-full object-cover" alt="history" />
+                                              </button>
+                                           ))}
+                                        </div>
+                                     </div>
+                                  </div>
+                              )}
+                           </div>
+                        )}
+                    </div>
+                 </div>
+              </div>
+
+              <input type="file" ref={fileInputRef} onChange={handleGenerate} accept="image/*" className="hidden" />
+              <input type="file" ref={bgFileInputRef} onChange={handleBgUpload} accept="image/*" className="hidden" />
+              <input type="file" ref={customDollInputRef} onChange={handleCustomDollUpload} accept="image/*" className="hidden" />
+            </div>
+          );
+        };
+
+        const rootElement = document.getElementById('root');
+        const root = ReactDOM.createRoot(rootElement);
+        root.render(
+            <React.StrictMode>
+                <App />
+            </React.StrictMode>
+        );
+    </script>
+</body>
+</html>
