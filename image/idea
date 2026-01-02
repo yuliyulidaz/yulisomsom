@@ -129,7 +129,7 @@
         </div>
         
         <div class="phones-wrapper">
-            <div class="phone-frame p1"><div class="screen-img" style="C:/pomodoro/스샷/1.jpg"></div></div>
+            <div class="phone-frame p1"><div class="screen-img" style="https://github.com/yuliyulidaz/yulisomsom/blob/main/image/1.jpg"></div></div>
             <div class="phone-frame p2"><div class="screen-img" style="background-image: url('YOUR_IMAGE_2.jpg');"></div></div>
             <div class="phone-frame p3"><div class="screen-img" style="background-image: url('YOUR_IMAGE_MAIN.jpg');"></div></div>
             <div class="phone-frame p4"><div class="screen-img" style="background-image: url('YOUR_IMAGE_4.jpg');"></div></div>
